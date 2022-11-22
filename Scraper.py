@@ -45,6 +45,7 @@ def downloader():
     deckhashes = DATA_PATH / 'deckhash.txt'
 
     if not deck_dir.exists() or not deckhashes.exists():
+        print(f'Error: Missing {deckhashes} or {deck_dir} directory')
         return
 
     with open(deckhashes, 'r') as file:
