@@ -1,5 +1,7 @@
 import math
 import requests
+import json
+import random
 
 def fetch_terms():
     terms = requests.get('http://localhost:8983/solr/decks/terms', params={
@@ -39,18 +41,45 @@ def generate_recommendations(query_cards, k=10):
             if not card in new_cards:
                 new_cards[card] = (0, 0)
             
-            # perhaps include df weighting here?
+            # include df weighting here?
             # + correct for the fact that very common cards will appear in many decks and thus get boosted here
             # + if you didn't include a very common card like sol-ring there porbabily is a reason
-            # - but maybe we actually want to recommnd sol ring if it is not in your deck?
-            df = math.log10(TERMS[card])
+            # - but maybe we actually want to recommnd sol ring if it is not in your deck
+            df = 1 # math.log10(TERMS[card])
             new_cards[card] = (new_cards[card][0] + score / df, new_cards[card][1] + 1)
 
     result = sorted(new_cards.items(), key=lambda t: t[1], reverse=True)
     return list(t for t in result[:k])
 
 
+def evaluate(filename, leave_out_count=20, k=10, runs=100):
+    with open(filename, 'r') as f:
+        data = json.load(f)
+        cards = data['cards'].split(' ')
+        cards_set = set(cards)
+
+        P = 0
+        R = 0
+        for _ in range(runs):
+            leave_out = set(random.sample(cards, leave_out_count))
+            query = cards_set - leave_out
+
+            recs = generate_recommendations(' '.join(query), k)
+            recs = set(t[0] for t in recs)
+
+            correct_retrieved = recs & leave_out
+
+            P += len(correct_retrieved) / k
+            R += len(correct_retrieved) / leave_out_count
+        P /= runs
+        R /= runs
+
+        print(P, R)
+
+
 if __name__ == '__main__':
-    cards = 'treasure-mage angel-of-the-ruins arcanists-owl burnished-hart cataclysmic-gearhulk etherium-sculptor ethersworn-canonist ethersworn-sphinx foundry-inspector gold-myr jhoiras-familiar kuldotha-forgemaster master-transmuter myr-battlesphere myr-retriever oswald-fiddlebender phyrexian-metamorph raff-capashen-ships-mage shimmer-myr silver-myr thought-monitor trinket-mage trophy-mage dispatch dramatic-reversal thirst-for-meaning fabricate open-the-vaults phyrexian-rebirth thoughtcast claws-of-gix ichor-wellspring mirrorworks nettlecyst razortide-bridge rings-of-brighthearth spine-of-ish-sah swiftfoot-boots travelers-amulet voltaic-key weatherlight mirrodin-besieged island plains'
-    recs = generate_recommendations(cards, 10)
-    print(*recs, sep="\n")
+    # cards = 'treasure-mage angel-of-the-ruins arcanists-owl burnished-hart cataclysmic-gearhulk etherium-sculptor ethersworn-canonist ethersworn-sphinx foundry-inspector gold-myr jhoiras-familiar kuldotha-forgemaster master-transmuter myr-battlesphere myr-retriever oswald-fiddlebender phyrexian-metamorph raff-capashen-ships-mage shimmer-myr silver-myr thought-monitor trinket-mage trophy-mage dispatch dramatic-reversal thirst-for-meaning fabricate open-the-vaults phyrexian-rebirth thoughtcast claws-of-gix ichor-wellspring mirrorworks nettlecyst razortide-bridge rings-of-brighthearth spine-of-ish-sah swiftfoot-boots travelers-amulet voltaic-key weatherlight mirrodin-besieged island plains'
+    # recs = generate_recommendations(cards, 10)
+    # print(*recs, sep="\n")
+    evaluate('test_decks/___JXUlpCxQ293JAyJVGlA.json')
+    evaluate('test_decks/___rmWo2RIkgfva6vHqXVA.json')
