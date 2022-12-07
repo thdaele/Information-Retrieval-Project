@@ -1,5 +1,6 @@
 import json
 import pathlib
+import re
 from tqdm import tqdm
 
 DECK_DIR = pathlib.Path('Data') / 'decks'
@@ -19,11 +20,20 @@ def main():
             cardViews = cardlist['cardviews']
             for cardView in cardViews:
                 processed_decklist.append(cardView['sanitized'])
+        
+        processed_decklist.append(sanitize(data['commanders'][0]))
+
+        if len(processed_decklist) < 50:
+            continue
+
         processed_json['cards'] = ' '.join(processed_decklist)
 
         with open(PROCESSED_DIR / file.name, 'w') as f:
             json.dump(processed_json, f)
 
+
+def sanitize(card):
+    return re.sub(r'[\#\$\%\&\'\(\)\*\+\,\.\/\:\;\<\=\>\?\@\[\\\]\^\_\`\{\|\}\~]', '', re.sub(r'[\ ]', '-', card)).lower().strip()
 
 if __name__ == '__main__':
     main()

@@ -14,3 +14,15 @@
 # stop
 ./bin/solr stop -all
 ```
+
+
+```
+# stop solr
+./bin/solr stop -all
+
+# start server with home directory server/ir2 (not in cloud mode)
+./bin/solr start -s ir2  
+
+# create core called 'decks'
+./bin/solr create -c decks
+```
