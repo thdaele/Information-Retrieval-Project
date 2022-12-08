@@ -3,7 +3,7 @@ import re
 def sanitize(card):
     return re.sub(r'[\#\$\%\&\'\(\)\*\+\,\.\:\;\<\=\>\?\@\[\\\]\^\_\`\{\|\}\~]', '', re.sub(r'[\ \/]', '-', card)).lower().strip()
 
-with open('obscura.txt', 'r') as f:
+with open('prosper.txt', 'r') as f:
     card_list = list()
     for line in f.readlines():
         card = sanitize(line)
