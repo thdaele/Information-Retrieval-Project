@@ -93,7 +93,9 @@ def average_precision(recommendations, relevant_cards):
             correct_retrieved = set(recommendations[:k+1]) & relevant_cards
             result += len(correct_retrieved) / (k+1)
 
-    return result / len(set(recommendations) & relevant_cards)
+    c = len(set(recommendations) & relevant_cards)
+
+    return result / c if c > 0 else 0
 
 
 def pr_values(recommendations, relevant_cards):

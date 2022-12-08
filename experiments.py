@@ -129,6 +129,6 @@ def discount_factor(folder, deck, seed):
 
 
 if __name__ == '__main__':
-    run_experiment(varying_left_out, 10, 5)
-    run_experiment(df_factor, 10, 5)
-    run_experiment(discount_factor, 10, 5)
+    run_experiment(varying_left_out, 100, 5)
+    run_experiment(df_factor, 100, 5)
+    run_experiment(discount_factor, 100, 5)
