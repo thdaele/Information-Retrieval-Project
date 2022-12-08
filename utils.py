@@ -9,6 +9,12 @@ def import_deck(file):
         data = json.load(f)
         return data['cards'].split(' ')
 
+def float_to_filename_safe(x):
+    if int(x) == x:
+        return str(int(x))
+    else:
+        return str(x).replace('.', '_')
+
 # with open('prosper.txt', 'r') as f:
 #     card_list = list()
 #     for line in f.readlines():

@@ -4,6 +4,9 @@ import random
 from collections import defaultdict
 import matplotlib.pyplot as plt
 
+import utils
+import constants
+
 
 # Class to fetch term document frequency
 class Terms:
@@ -20,13 +23,16 @@ class Terms:
         return Terms.terms
 
 
-def generate_recommendations(query_cards, k=10, config=None):
-    similar_decks = config['similar_decks'] if 'similar_decks' in config else 100
-    discount_factor = config['discount_factor'] if 'discount_factor' in config else 1.0
-    calculate_df_factor = config['calculate_df_factor'] if 'calculate_df_factor' in config else lambda _: 1
+def generate_recommendations(deck_string, k=10, similar_decks=100, discount_factor=1.0, calculate_df_factor=None):
+    """
+    Generate k card recommendations for a (partial) commander deck.
+    """
+
+    if calculate_df_factor is None:
+        calculate_df_factor = lambda _: 1
 
     r = requests.get('http://localhost:8983/solr/decks/mlt', params={
-        'stream.body': query_cards,
+        'stream.body': deck_string,
         'mlt.interestingTerms': 'details',
         'mlt.mindf': 0,
         'mlt.mintf': 0,
@@ -36,14 +42,13 @@ def generate_recommendations(query_cards, k=10, config=None):
     })
 
     data = r.json()['response']['docs']
-    query_cards_set = set(query_cards.split(' '))
+    query_cards_set = set(deck_string.split(' '))
 
     new_cards_score = defaultdict(lambda: 0)
     cum_discount = 1
     for doc in data:
         score = doc['score']
         cards_set = set(doc['cards'].split(' '))
-        # print(doc['id'], score)
 
         new_cards_set = cards_set - query_cards_set
         for card in new_cards_set:
@@ -55,31 +60,64 @@ def generate_recommendations(query_cards, k=10, config=None):
     return list(t[0] for t in result[:k])
 
 
-def pr_values(cards, leave_out_count=20, max_k=1000, seed=None, config=None):
-    cards_set = set(cards)
-
+def deck_to_testcase(deck, leave_out_count=25, seed=None):
+    """
+    Convert a test deck into a test case by removing <leave_out_count> random cards from the deck.
+    Return the modified deck and the taken out cards.
+    The taken out cards act as a set of relevant cards for calculating recall.
+    """
     if seed is not None:
         random.seed(seed)
-    leave_out = set(random.sample(cards, leave_out_count))
-    query_set = cards_set - leave_out
-    query = ' '.join(query_set)
+    leave_out_set = set(random.sample(deck, leave_out_count))
+    query_set = set(deck) - leave_out_set
 
-    recs = generate_recommendations(query, k=max_k, config=config)
+    return query_set, leave_out_set
+
+
+def r_precision(recommendations, relevant_cards):
+    """
+    Calculate R-precision
+    """
+    k = len(relevant_cards)
+    correct_retrieved = set(recommendations[:k]) & relevant_cards
+    return len(correct_retrieved) / k
+
+
+def average_precision(recommendations, relevant_cards):
+    """
+    Calculate average precision ~ area under precision-recall curve
+    """
+    result = 0
+    for k, r in enumerate(recommendations):
+        if r in relevant_cards:
+            correct_retrieved = set(recommendations[:k+1]) & relevant_cards
+            result += len(correct_retrieved) / (k+1)
+
+    return result / len(set(recommendations) & relevant_cards)
+
+
+def pr_values(recommendations, relevant_cards):
+    """
+    Calculate precision@k and recall@k values for a ranked list of recommendation based on a set of relevant cards.
+    k values from 1 to the length of the recommendations list will be used.
+    """
 
     P = list()
     R = list()
-    for k in range(1, max_k + 1):
-        correct_retrieved = set(recs[:k]) & leave_out
+    for k in range(0, len(recommendations)):
+        correct_retrieved = set(recommendations[:k+1]) & relevant_cards
         c = len(correct_retrieved)
-        P.append(c / k)
-        R.append(c / leave_out_count)
+        P.append(c / (k+1))
+        R.append(c / len(relevant_cards))
 
     return P, R
 
 
-def pr_curve(cards, leave_out_count=25, max_k=1000, seed=None, config=None):
-    P, R = pr_values(cards, leave_out_count, max_k, seed, config)
-
+def pr_curve(P, R):
+    """
+    Create a precision-recall curve plot.
+    """
+    # https://stackoverflow.com/questions/39836953/how-to-draw-a-precision-recall-curve-with-interpolation-in-python
     P_interpolated = np.maximum.accumulate(np.array(P)[::-1])[::-1]
     
     _, ax = plt.subplots()
@@ -89,52 +127,17 @@ def pr_curve(cards, leave_out_count=25, max_k=1000, seed=None, config=None):
     ax.set_ylabel('Precision')
     ax.set_xlim([-0.01, 1.01])
     ax.set_ylim([-0.01, 1.01])
-    
 
 
-# def evaluate(directory, leave_out_count=20, seed=None):
-#     max_k = 1000
-#     test_count = 1
-#     k_range = range(1, max_k + 1)
-
-#     C = defaultdict(lambda: 0)
-#     for i, f in tqdm(enumerate(directory.iterdir())):
-#         if i >= test_count:
-#             break
-
-#         with open(f, 'r') as f:
-#             data = json.load(f)
-#             cards = data['cards'].split(' ')
-#             cards_set = set(cards)
-
-#             if seed is not None:
-#                 random.seed(seed)
-
-#             leave_out = set(random.sample(cards, leave_out_count))
-#             query_set = cards_set - leave_out
-#             query = ' '.join(query_set)
-#             similar_decks = 100
-
-#             recs = generate_recommendations(query, k=max_k, similar_decks=similar_decks)
-
-#             for k in k_range:
-#                 correct_retrieved = set(recs[:k]) & leave_out
-
-#                 C[k] += len(correct_retrieved)
-    
-#     P = dict()
-#     R = dict()
-#     for k in k_range:
-#         P[k] = C[k] / (test_count * k)
-#         R[k] = C[k] / (test_count * leave_out_count)
-
-#     return P, R
-
-
-def generate_deck(commander):
+def generate_deck(commander, k=1, deck_size=80):
+    """
+    Fun procedure to generate a full commander deck by starting with a commander and expanding the deck by repeatedly picking from the top k recommendations.
+    Deck size lower than 100 to account for manually deciding on basic land counts.
+    """
     deck = [commander]
-    while len(deck) < 80:
-        deck.append(generate_recommendations(" ".join(deck), k=1)[0][0])
+    while len(deck) < deck_size:
+        index = random.randrange(k)
+        deck.append(generate_recommendations(" ".join(deck), k=k)[index])
 
     return deck
 
@@ -160,8 +163,14 @@ if __name__ == '__main__':
     # recs = [t[0] for t in generate_recommendations(deck, 20)]
     # print(*recs, sep="\n")
 
-    
-    # pr_curve(deck, seed=0, leave_out_count=25)
+    deck = utils.import_deck(constants.TEST_DECKS / '_1ucLPMTGWAouSCQuLRyig.json')
+    query, relevant_cards = deck_to_testcase(deck, seed=0)
+    recommendations = generate_recommendations(" ".join(query), k=1000)
+
+    print(average_precision(recommendations, relevant_cards))
+    P, R = pr_values(recommendations, relevant_cards)
+    pr_curve(P, R)
+    plt.show()
     # plt.savefig('test.png')
     pass
 
