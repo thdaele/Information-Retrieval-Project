@@ -1,7 +1,0 @@
-10u - 12u45	research solr/lucene
-14u15 - 16u	continue research solr
-16u - 17u	create schema for decks	
-
-10u - 12u45	scrape decks
-13u30 - 16u	scrape
-16u - 17u	preprocess data

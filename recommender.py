@@ -1,23 +1,29 @@
-import math
+import numpy as np
 import requests
-import json
 import random
-import pathlib
-
-def fetch_terms():
-    terms = requests.get('http://localhost:8983/solr/decks/terms', params={
-        'terms.fl': 'cards',
-        'terms.limit': -1,
-    }).json()['terms']['cards']
-
-    it = iter(terms)
-    return dict(zip(it, it))
-
-TERMS = fetch_terms()
+from collections import defaultdict
+import matplotlib.pyplot as plt
 
 
-def generate_recommendations(query_cards, k=10, ignore_id=None, discount_factor=1.0):
-    query_cards_set = set(query_cards.split(' '))
+# Class to fetch term document frequency
+class Terms:
+    terms = None
+    @staticmethod
+    def get_terms():
+        if Terms.terms is None:
+            terms = requests.get('http://localhost:8983/solr/decks/terms', params={
+                'terms.fl': 'cards',
+                'terms.limit': -1,
+            }).json()['terms']['cards']
+            it = iter(terms)
+            Terms.terms = dict(zip(it, it))
+        return Terms.terms
+
+
+def generate_recommendations(query_cards, k=10, config=None):
+    similar_decks = config['similar_decks'] if 'similar_decks' in config else 100
+    discount_factor = config['discount_factor'] if 'discount_factor' in config else 1.0
+    calculate_df_factor = config['calculate_df_factor'] if 'calculate_df_factor' in config else lambda _: 1
 
     r = requests.get('http://localhost:8983/solr/decks/mlt', params={
         'stream.body': query_cards,
@@ -26,88 +32,111 @@ def generate_recommendations(query_cards, k=10, ignore_id=None, discount_factor=
         'mlt.mintf': 0,
         'mlt.boost': 'true',
         'fl': 'id, cards, score',
-        'rows': int(10000 / len(query_cards_set))
+        'rows': similar_decks
     })
 
-    data = r.json()
-    docs = data['response']['docs']
+    data = r.json()['response']['docs']
+    query_cards_set = set(query_cards.split(' '))
 
-    
-
-    new_cards = dict()
+    new_cards_score = defaultdict(lambda: 0)
     cum_discount = 1
-    for doc in docs:
-        if doc['id'] == ignore_id:
-            continue
+    for doc in data:
         score = doc['score']
         cards_set = set(doc['cards'].split(' '))
         # print(doc['id'], score)
 
         new_cards_set = cards_set - query_cards_set
         for card in new_cards_set:
-            if not card in new_cards:
-                new_cards[card] = (0, 0)
-            
-            # include df weighting here?
-            # + correct for the fact that very common cards will appear in many decks and thus get boosted here
-            # + if you didn't include a very common card like sol-ring there porbabily is a reason
-            # - but maybe we actually want to recommnd sol ring if it is not in your deck
-            df = 1 #math.log(TERMS[card])
-            new_cards[card] = (new_cards[card][0] + cum_discount * score / df, new_cards[card][1] + 1)
+            new_cards_score[card] += cum_discount * score / calculate_df_factor(Terms.get_terms()[card])
         
         cum_discount *= discount_factor
 
-    result = sorted(new_cards.items(), key=lambda t: t[1], reverse=True)
-    return list(t for t in result[:k])
+    result = sorted(new_cards_score.items(), key=lambda t: t[1], reverse=True)
+    return list(t[0] for t in result[:k])
 
 
-def evaluate_file(filename, leave_out_count=20, k=5, runs=1):
-    with open(filename, 'r') as f:
-        data = json.load(f)
-        deck_id = data['id']
-        cards = data['cards'].split(' ')
-        cards_set = set(cards)
+def pr_values(cards, leave_out_count=20, max_k=1000, seed=None, config=None):
+    cards_set = set(cards)
 
-        c = 0
-        for _ in range(runs):
-            leave_out = set(random.sample(cards, leave_out_count))
-            query = cards_set - leave_out
+    if seed is not None:
+        random.seed(seed)
+    leave_out = set(random.sample(cards, leave_out_count))
+    query_set = cards_set - leave_out
+    query = ' '.join(query_set)
 
-            recs = generate_recommendations(' '.join(query), k=k, ignore_id=deck_id, discount_factor=1)
-            recs = set(t[0] for t in recs)
+    recs = generate_recommendations(query, k=max_k, config=config)
 
-            correct_retrieved = recs & leave_out
-            # print(*correct_retrieved)
+    P = list()
+    R = list()
+    for k in range(1, max_k + 1):
+        correct_retrieved = set(recs[:k]) & leave_out
+        c = len(correct_retrieved)
+        P.append(c / k)
+        R.append(c / leave_out_count)
 
-            c += len(correct_retrieved)
-        
-        P = c / (runs * k)
-        R = c / (runs * leave_out_count)
-
-        return P, R
+    return P, R
 
 
-def evaluate(directory, k):
-    P = 0
-    R = 0
-    count = 0
-    for f in directory.iterdir():
-        p, r = evaluate_file(f, k=k)
-        P += p
-        R += r
-        count += 1
+def pr_curve(cards, leave_out_count=25, max_k=1000, seed=None, config=None):
+    P, R = pr_values(cards, leave_out_count, max_k, seed, config)
 
-    return P / count, R / count
+    P_interpolated = np.maximum.accumulate(np.array(P)[::-1])[::-1]
+    
+    _, ax = plt.subplots()
+    ax.plot(R, P)
+    ax.step(R, P_interpolated, linewidth=1)
+    ax.set_xlabel('Recall')
+    ax.set_ylabel('Precision')
+    ax.set_xlim([-0.01, 1.01])
+    ax.set_ylim([-0.01, 1.01])
+    
+
+
+# def evaluate(directory, leave_out_count=20, seed=None):
+#     max_k = 1000
+#     test_count = 1
+#     k_range = range(1, max_k + 1)
+
+#     C = defaultdict(lambda: 0)
+#     for i, f in tqdm(enumerate(directory.iterdir())):
+#         if i >= test_count:
+#             break
+
+#         with open(f, 'r') as f:
+#             data = json.load(f)
+#             cards = data['cards'].split(' ')
+#             cards_set = set(cards)
+
+#             if seed is not None:
+#                 random.seed(seed)
+
+#             leave_out = set(random.sample(cards, leave_out_count))
+#             query_set = cards_set - leave_out
+#             query = ' '.join(query_set)
+#             similar_decks = 100
+
+#             recs = generate_recommendations(query, k=max_k, similar_decks=similar_decks)
+
+#             for k in k_range:
+#                 correct_retrieved = set(recs[:k]) & leave_out
+
+#                 C[k] += len(correct_retrieved)
+    
+#     P = dict()
+#     R = dict()
+#     for k in k_range:
+#         P[k] = C[k] / (test_count * k)
+#         R[k] = C[k] / (test_count * leave_out_count)
+
+#     return P, R
 
 
 def generate_deck(commander):
-    cards = [commander]
-    while len(cards) < 80:
-        cards.append(generate_recommendations(" ".join(cards), k=1)[0][0])
+    deck = [commander]
+    while len(deck) < 80:
+        deck.append(generate_recommendations(" ".join(deck), k=1)[0][0])
 
-    return cards
-
-
+    return deck
 
 
 if __name__ == '__main__':
@@ -121,19 +150,18 @@ if __name__ == '__main__':
     
     # Prosper Tome-Bound precon
     # cards = 'prosper-tome-bound apex-of-power arcane-signet bag-of-devouring bedevil bituminous-blast bojuka-bog bucknards-everfull-purse chaos-channeler chaos-wand chaos-warp chittering-witch command-tower commanders-sphere commune-with-lava consuming-vapors danse-macabre dark-dweller-oracle dead-mans-chest death-tyrant dire-fleet-daredevil disrupt-decorum dream-pillager ebony-fly etali-primal-storm exotic-orchard fellwar-stone fevered-suspicion fiend-of-the-shadows fiendlash foreboding-ruins gonti-lord-of-luxury grim-hireling hellish-rebuke hex hurl-through-hell ignite-the-future izzet-chemister karazikar-the-eye-tyrant light-up-the-stage lorcan-warlock-collector loyal-apprentice marionette-master mind-stone mortuary-mire mountain ogre-slumlord orazca-relic phthisis piper-of-the-swarm pontiff-of-blight rakdos-carnarium rakdos-charm rakdos-signet reckless-endeavor shadowblood-ridge share-the-spoils shiny-impetus smoldering-marsh sol-ring spinerock-knoll swamp tainted-peak talisman-of-indulgence tectonic-giant terminate theater-of-horrors throes-of-chaos underdark-rift unstable-obelisk vandalblast warlock-class wild-magic-sorcerer you-find-some-prisoners zhalfirin-void'
+    
     # recs = [t[0] for t in generate_recommendations(cards, 20)]
     # print(*recs, sep="\n")
 
-    # for k in [1, 2, 3, 5, 10, 15, 20, 25, 50]:
-    #     print(k, *evaluate(pathlib.Path('test_decks'), k))
-
-    deck = generate_deck('prosper-tome-bound')
-    print(*deck, sep="\n")
+    # deck = generate_deck('prosper-tome-bound')
+    # print(*deck, sep="\n")
     # deck = 'prosper-tome-bound sol-ring mountain swamp arcane-signet command-tower rakdos-signet mind-stone rakdos-charm terminate bedevil etali-primal-storm hurl-through-hell wild-magic-sorcerer ignite-the-future light-up-the-stage gonti-lord-of-luxury dire-fleet-daredevil theater-of-horrors vandalblast talisman-of-indulgence chaos-warp fellwar-stone commune-with-lava you-find-some-prisoners foreboding-ruins smoldering-marsh tainted-peak bojuka-bog exotic-orchard fevered-suspicion grim-hireling shadowblood-ridge commanders-sphere marionette-master reckless-endeavor mortuary-mire rakdos-carnarium spinerock-knoll tectonic-giant chaos-wand throes-of-chaos dead-mans-chest bituminous-blast consuming-vapors fiend-of-the-shadows dream-pillager share-the-spoils chaos-channeler izzet-chemister apex-of-power disrupt-decorum hex shiny-impetus lorcan-warlock-collector underdark-rift karazikar-the-eye-tyrant dark-dweller-oracle pontiff-of-blight hellish-rebuke danse-macabre unstable-obelisk zhalfirin-void bucknards-everfull-purse ebony-fly death-tyrant bag-of-devouring loyal-apprentice orazca-relic warlock-class phthisis fiendlash piper-of-the-swarm ogre-slumlord chittering-witch revel-in-riches xorn jeskas-will kalain-reclusive-painter valki-god-of-lies'
     # recs = [t[0] for t in generate_recommendations(deck, 20)]
     # print(*recs, sep="\n")
 
-    # recs = generate_recommendations('prosper-tome-bound')
-    # print(*recs, sep="\n")
-
     
+    # pr_curve(deck, seed=0, leave_out_count=25)
+    # plt.savefig('test.png')
+    pass
+

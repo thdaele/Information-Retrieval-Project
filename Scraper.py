@@ -4,18 +4,10 @@ import json
 import pathlib
 from tqdm import tqdm
 
+import utils
+
 DATA_PATH = pathlib.Path('Data')
 BATCH_SIZE = 100
-
-
-def sanitize_commander_name(name):
-    name = name.replace(' ', '-')
-    name = name.replace('"', '')
-    name = name.replace(',', '')
-    name = name.replace('\'', '')
-    name = name.replace('.', '')
-    name = name.lower()
-    return name
 
 
 def scraper(overwrite=False):
@@ -28,13 +20,13 @@ def scraper(overwrite=False):
 
     file = open(deckhashes, 'w')
     for commander in tqdm(commanders):
-        r = requests.get(f'https://json.edhrec.com/pages/decks/{sanitize_commander_name(commander)}.json')
+        r = requests.get(f'https://json.edhrec.com/pages/decks/{utils.sanitize(commander)}.json')
         if r.status_code == 200:
             decks = json.loads(r.content)['table']
             for deck in decks:
                 file.write(deck['urlhash'] + '\n')
         else:
-            print(f'Error: {commander} - {sanitize_commander_name(commander)}')
+            print(f'Error: {commander} - {utils.sanitize(commander)}')
             print(f'Error: {r.status_code}')
             print(r.content)
     file.close()
