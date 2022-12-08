@@ -8,7 +8,7 @@ DECK_DIR = pathlib.Path('Data') / 'decks'
 PROCESSED_DIR = pathlib.Path('Data') / 'processed_decks'
 PROCESSED_TEST_DIR = pathlib.Path('Data') / 'processed_test_decks'
 
-TRAIN_TEST_SPLIT = 0.95
+TRAIN_TEST_SPLIT = 0.99
 
 
 def main():
