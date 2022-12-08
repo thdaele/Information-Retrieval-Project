@@ -16,7 +16,7 @@ def fetch_terms():
 TERMS = fetch_terms()
 
 
-def generate_recommendations(query_cards, k=10, ignore_id=None):
+def generate_recommendations(query_cards, k=10, ignore_id=None, discount_factor=1.0):
     r = requests.get('http://localhost:8983/solr/decks/mlt', params={
         'stream.body': query_cards,
         'mlt.interestingTerms': 'details',
@@ -33,6 +33,7 @@ def generate_recommendations(query_cards, k=10, ignore_id=None):
     query_cards_set = set(query_cards.split(' '))
 
     new_cards = dict()
+    cum_discount = 1
     for doc in docs:
         if doc['id'] == ignore_id:
             continue
@@ -49,13 +50,15 @@ def generate_recommendations(query_cards, k=10, ignore_id=None):
             # + if you didn't include a very common card like sol-ring there porbabily is a reason
             # - but maybe we actually want to recommnd sol ring if it is not in your deck
             df = math.log(TERMS[card])
-            new_cards[card] = (new_cards[card][0] + score / df, new_cards[card][1] + 1)
+            new_cards[card] = (new_cards[card][0] + cum_discount * score / df, new_cards[card][1] + 1)
+        
+        cum_discount *= discount_factor
 
     result = sorted(new_cards.items(), key=lambda t: t[1], reverse=True)
     return list(t for t in result[:k])
 
 
-def evaluate(filename, leave_out_count=20, k=5, runs=100):
+def evaluate_file(filename, leave_out_count=20, k=5, runs=100):
     with open(filename, 'r') as f:
         data = json.load(f)
         deck_id = data['id']
@@ -67,8 +70,7 @@ def evaluate(filename, leave_out_count=20, k=5, runs=100):
             leave_out = set(random.sample(cards, leave_out_count))
             query = cards_set - leave_out
 
-            recs = generate_recommendations(' '.join(query), k, deck_id)
-            # recs = generate_recommendations(' '.join(query), k)
+            recs = generate_recommendations(' '.join(query), k=k, ignore_id=deck_id, discount_factor=1)
             recs = set(t[0] for t in recs)
 
             correct_retrieved = recs & leave_out
@@ -78,22 +80,15 @@ def evaluate(filename, leave_out_count=20, k=5, runs=100):
         P = c / (runs * k)
         R = c / (runs * leave_out_count)
 
-        # print(deck_id, c/runs, P, R)
-
         return P, R
 
 
-if __name__ == '__main__':
-    # cards = 'treasure-mage angel-of-the-ruins arcanists-owl burnished-hart cataclysmic-gearhulk etherium-sculptor ethersworn-canonist ethersworn-sphinx foundry-inspector gold-myr jhoiras-familiar kuldotha-forgemaster master-transmuter myr-battlesphere myr-retriever oswald-fiddlebender phyrexian-metamorph raff-capashen-ships-mage shimmer-myr silver-myr thought-monitor trinket-mage trophy-mage dispatch dramatic-reversal thirst-for-meaning fabricate open-the-vaults phyrexian-rebirth thoughtcast claws-of-gix ichor-wellspring mirrorworks nettlecyst razortide-bridge rings-of-brighthearth spine-of-ish-sah swiftfoot-boots travelers-amulet voltaic-key weatherlight mirrodin-besieged island plains'
-    # cards = 'aerial-extortionist alela-artful-provocateur an-offer-you-cant-refuse arcane-sanctum arcane-signet archon-of-coronation ash-barrens austere-command azorius-signet cephalid-facetaker champion-of-wits change-of-plans chasm-skulker choked-estuary command-tower commanders-sphere commit-memory creeping-tar-pit currency-converter custodi-lich daring-saboteur darkwater-catacombs daxos-of-meletis dimir-signet dragonlord-ojutai drana-liberator-of-malakir dusk-dawn esper-panorama exotic-orchard fallen-shinobi fellwar-stone fetid-heath ghostly-pilferer graveblade-marauder identity-thief in-too-deep inkfathom-witch island jailbreak kamiz-obscura-oculus lethal-scheme life-insurance looter-il-kor mask-of-riddles mask-of-the-schemer misfortune-teller myriad-landscape nadir-kraken nightmare-unmaking obscura-charm obscura-confluence obscura-storefront orzhov-signet oskar-rubbish-reclaimer path-of-ancestry plains port-town prairie-stream profane-command quietus-spike rogues-passage shadowmage-infiltrator silent-blade-oni skycloud-expanse skyway-robber smugglers-share sol-ring stolen-identity strionic-resonator sun-titan sunken-hollow swamp swiftfoot-boots swords-to-plowshares temple-of-silence thief-of-sanity thriving-heath thriving-isle thriving-moor tivit-seller-of-secrets treasure-cruise utter-end wayfarers-bauble whirler-rogue wrexial-the-risen-deep writ-of-return'
-    # recs = generate_recommendations(cards, 10)
-    # print(*recs, sep="\n")
-
+def evaluate(directory):
     P = 0
     R = 0
     count = 0
-    for f in pathlib.Path('test_decks').iterdir():
-        p, r = evaluate(f)
+    for f in directory.iterdir():
+        p, r = evaluate_file(f)
         P += p
         R += r
         count += 1
@@ -102,3 +97,12 @@ if __name__ == '__main__':
     R = R / count
 
     print(P, R)
+
+
+if __name__ == '__main__':
+    # cards = 'treasure-mage angel-of-the-ruins arcanists-owl burnished-hart cataclysmic-gearhulk etherium-sculptor ethersworn-canonist ethersworn-sphinx foundry-inspector gold-myr jhoiras-familiar kuldotha-forgemaster master-transmuter myr-battlesphere myr-retriever oswald-fiddlebender phyrexian-metamorph raff-capashen-ships-mage shimmer-myr silver-myr thought-monitor trinket-mage trophy-mage dispatch dramatic-reversal thirst-for-meaning fabricate open-the-vaults phyrexian-rebirth thoughtcast claws-of-gix ichor-wellspring mirrorworks nettlecyst razortide-bridge rings-of-brighthearth spine-of-ish-sah swiftfoot-boots travelers-amulet voltaic-key weatherlight mirrodin-besieged island plains'
+    # cards = 'aerial-extortionist alela-artful-provocateur an-offer-you-cant-refuse arcane-sanctum arcane-signet archon-of-coronation ash-barrens austere-command azorius-signet cephalid-facetaker champion-of-wits change-of-plans chasm-skulker choked-estuary command-tower commanders-sphere commit-memory creeping-tar-pit currency-converter custodi-lich daring-saboteur darkwater-catacombs daxos-of-meletis dimir-signet dragonlord-ojutai drana-liberator-of-malakir dusk-dawn esper-panorama exotic-orchard fallen-shinobi fellwar-stone fetid-heath ghostly-pilferer graveblade-marauder identity-thief in-too-deep inkfathom-witch island jailbreak kamiz-obscura-oculus lethal-scheme life-insurance looter-il-kor mask-of-riddles mask-of-the-schemer misfortune-teller myriad-landscape nadir-kraken nightmare-unmaking obscura-charm obscura-confluence obscura-storefront orzhov-signet oskar-rubbish-reclaimer path-of-ancestry plains port-town prairie-stream profane-command quietus-spike rogues-passage shadowmage-infiltrator silent-blade-oni skycloud-expanse skyway-robber smugglers-share sol-ring stolen-identity strionic-resonator sun-titan sunken-hollow swamp swiftfoot-boots swords-to-plowshares temple-of-silence thief-of-sanity thriving-heath thriving-isle thriving-moor tivit-seller-of-secrets treasure-cruise utter-end wayfarers-bauble whirler-rogue wrexial-the-risen-deep writ-of-return'
+    # recs = generate_recommendations(cards, 10, discount_factor=0.5)
+    # print(*recs, sep="\n")
+
+    evaluate(pathlib.Path('test_decks'))
