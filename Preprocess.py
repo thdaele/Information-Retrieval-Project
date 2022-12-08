@@ -33,7 +33,7 @@ def main():
 
 
 def sanitize(card):
-    return re.sub(r'[\#\$\%\&\'\(\)\*\+\,\.\/\:\;\<\=\>\?\@\[\\\]\^\_\`\{\|\}\~]', '', re.sub(r'[\ ]', '-', card)).lower().strip()
+    return re.sub(r'[\#\$\%\&\'\(\)\*\+\,\.\:\;\<\=\>\?\@\[\\\]\^\_\`\{\|\}\~]', '', re.sub(r'[\ \/]', '-', card)).lower().strip()
 
 if __name__ == '__main__':
     main()
