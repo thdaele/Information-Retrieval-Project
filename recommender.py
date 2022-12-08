@@ -67,7 +67,7 @@ def evaluate(filename, leave_out_count=20, k=5, runs=100):
             leave_out = set(random.sample(cards, leave_out_count))
             query = cards_set - leave_out
 
-            recs = generate_recommendations(' '.join(query), k+1, deck_id)
+            recs = generate_recommendations(' '.join(query), k, deck_id)
             # recs = generate_recommendations(' '.join(query), k)
             recs = set(t[0] for t in recs)
 
@@ -78,7 +78,9 @@ def evaluate(filename, leave_out_count=20, k=5, runs=100):
         P = c / (runs * k)
         R = c / (runs * leave_out_count)
 
-        print(deck_id, c/runs, P, R)
+        # print(deck_id, c/runs, P, R)
+
+        return P, R
 
 
 if __name__ == '__main__':
@@ -86,5 +88,17 @@ if __name__ == '__main__':
     # cards = 'aerial-extortionist alela-artful-provocateur an-offer-you-cant-refuse arcane-sanctum arcane-signet archon-of-coronation ash-barrens austere-command azorius-signet cephalid-facetaker champion-of-wits change-of-plans chasm-skulker choked-estuary command-tower commanders-sphere commit-memory creeping-tar-pit currency-converter custodi-lich daring-saboteur darkwater-catacombs daxos-of-meletis dimir-signet dragonlord-ojutai drana-liberator-of-malakir dusk-dawn esper-panorama exotic-orchard fallen-shinobi fellwar-stone fetid-heath ghostly-pilferer graveblade-marauder identity-thief in-too-deep inkfathom-witch island jailbreak kamiz-obscura-oculus lethal-scheme life-insurance looter-il-kor mask-of-riddles mask-of-the-schemer misfortune-teller myriad-landscape nadir-kraken nightmare-unmaking obscura-charm obscura-confluence obscura-storefront orzhov-signet oskar-rubbish-reclaimer path-of-ancestry plains port-town prairie-stream profane-command quietus-spike rogues-passage shadowmage-infiltrator silent-blade-oni skycloud-expanse skyway-robber smugglers-share sol-ring stolen-identity strionic-resonator sun-titan sunken-hollow swamp swiftfoot-boots swords-to-plowshares temple-of-silence thief-of-sanity thriving-heath thriving-isle thriving-moor tivit-seller-of-secrets treasure-cruise utter-end wayfarers-bauble whirler-rogue wrexial-the-risen-deep writ-of-return'
     # recs = generate_recommendations(cards, 10)
     # print(*recs, sep="\n")
+
+    P = 0
+    R = 0
+    count = 0
     for f in pathlib.Path('test_decks').iterdir():
-        evaluate(f)
+        p, r = evaluate(f)
+        P += p
+        R += r
+        count += 1
+
+    P = P / count
+    R = R / count
+
+    print(P, R)
