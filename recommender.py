@@ -23,7 +23,7 @@ class Terms:
         return Terms.terms
 
 
-def generate_recommendations(deck_string, k=10, similar_decks=100, discount_factor=1.0, calculate_df_factor=None):
+def generate_recommendations(deck_string, k=10, similar_decks_count=10, use_deck_score=False, discount_factor=1.0, calculate_df_factor=None):
     """
     Generate k card recommendations for a (partial) commander deck.
     """
@@ -38,25 +38,29 @@ def generate_recommendations(deck_string, k=10, similar_decks=100, discount_fact
         'mlt.mintf': 0,
         'mlt.boost': 'true',
         'fl': 'id, cards, score',
-        'rows': similar_decks
+        'rows': similar_decks_count
     })
 
-    data = r.json()['response']['docs']
+    decks = r.json()['response']['docs']
     query_cards_set = set(deck_string.split(' '))
 
-    new_cards_score = defaultdict(lambda: 0)
-    cum_discount = 1
-    for doc in data:
-        score = doc['score']
-        cards_set = set(doc['cards'].split(' '))
+    cards_score = defaultdict(lambda: 0)
+    discount = 1.0
+    for deck in decks:
+        deck_score = deck['score']
+        deck_cards = set(deck['cards'].split(' '))
 
-        new_cards_set = cards_set - query_cards_set
-        for card in new_cards_set:
-            new_cards_score[card] += cum_discount * score / calculate_df_factor(Terms.get_terms()[card])
-        
-        cum_discount *= discount_factor
+        cards = deck_cards - query_cards_set
+        for card in cards:
+            term_freq = Terms.get_terms()[card]
 
-    result = sorted(new_cards_score.items(), key=lambda t: t[1], reverse=True)
+            card_score = deck_score if use_deck_score else 1
+            
+            cards_score[card] += discount * card_score * calculate_df_factor(term_freq)
+
+        discount *= discount_factor
+
+    result = sorted(cards_score.items(), key=lambda t: t[1], reverse=True)
     return list(t[0] for t in result[:k])
 
 
