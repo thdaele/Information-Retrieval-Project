@@ -1,3 +1,4 @@
+import math
 import numpy as np
 import requests
 import random
@@ -11,6 +12,7 @@ import constants
 # Class to fetch term document frequency
 class Terms:
     terms = None
+    size = None
     @staticmethod
     def get_terms():
         if Terms.terms is None:
@@ -22,14 +24,29 @@ class Terms:
             Terms.terms = dict(zip(it, it))
         return Terms.terms
 
+    @staticmethod
+    def get_collection_size():
+        if Terms.size is None:
+            r = requests.get('http://localhost:8983/solr/decks/select', params={
+                'q': '*:*',
+                'rows': 0
+            })
+            Terms.size = r.json()['response']['numFound']
+        return Terms.size
 
-def generate_recommendations(deck_string, k=10, similar_decks_count=10, use_deck_score=False, discount_factor=1.0, calculate_df_factor=None):
+def generate_recommendations(deck_string, k, similar_decks_count=10, use_deck_score=False, discount_factor=1.0, calculate_df_factor='no'):
     """
     Generate k card recommendations for a (partial) commander deck.
     """
 
-    if calculate_df_factor is None:
+    if calculate_df_factor == 'no':
         calculate_df_factor = lambda _: 1
+    if calculate_df_factor == 'idf':
+        calculate_df_factor = lambda df: math.log(Terms.get_collection_size() / df)
+    if calculate_df_factor == 'prob-idf':
+        calculate_df_factor = lambda df: max(0, math.log((Terms.get_collection_size() - df)/ df))
+    if calculate_df_factor == 'df':
+        calculate_df_factor = lambda df: math.log(df)
 
     r = requests.get('http://localhost:8983/solr/decks/mlt', params={
         'stream.body': deck_string,
@@ -158,7 +175,7 @@ if __name__ == '__main__':
     # cards = 'mizzix-of-the-izmagnus goblin-electromancer jaces-archivist gigantoplasm talrand-sky-summoner psychosis-crawler broodbirth-viper illusory-ambusher lone-revenant warchief-giant charmbreaker-devils arjun-the-shifting-flame etherium-horn-sorcerer melek-izzet-paragon dragon-mage preordain faithless-looting vandalblast mizzium-mortars windfall mystic-retrieval stolen-goods mizzixs-mastery rite-of-replication sleep chain-reaction call-the-skybreaker blatant-thievery epic-experiment meteor-blast blustersquall brainstorm echoing-truth desperate-ravings urzas-rage counterflux aetherize fact-or-fiction reins-of-power steam-augury mystic-confluence word-of-seizing act-of-aggression prophetic-bolt aethersnatch mirror-match fireminds-foresight repeal comet-storm magmaquake stroke-of-genius dominate blue-suns-zenith sol-ring izzet-signet thought-vessel worn-powerstone seal-of-the-guildpact awaken-the-sky-tyrant rite-of-the-raging-storm thought-reflection command-tower evolving-wilds izzet-boilerworks izzet-guildgate reliquary-tower rogues-passage spinerock-knoll swiftwater-cliffs temple-of-the-false-god terramorphic-expanse vivid-crag vivid-creek island mountain'
     
     # Prosper Tome-Bound precon
-    # cards = 'prosper-tome-bound apex-of-power arcane-signet bag-of-devouring bedevil bituminous-blast bojuka-bog bucknards-everfull-purse chaos-channeler chaos-wand chaos-warp chittering-witch command-tower commanders-sphere commune-with-lava consuming-vapors danse-macabre dark-dweller-oracle dead-mans-chest death-tyrant dire-fleet-daredevil disrupt-decorum dream-pillager ebony-fly etali-primal-storm exotic-orchard fellwar-stone fevered-suspicion fiend-of-the-shadows fiendlash foreboding-ruins gonti-lord-of-luxury grim-hireling hellish-rebuke hex hurl-through-hell ignite-the-future izzet-chemister karazikar-the-eye-tyrant light-up-the-stage lorcan-warlock-collector loyal-apprentice marionette-master mind-stone mortuary-mire mountain ogre-slumlord orazca-relic phthisis piper-of-the-swarm pontiff-of-blight rakdos-carnarium rakdos-charm rakdos-signet reckless-endeavor shadowblood-ridge share-the-spoils shiny-impetus smoldering-marsh sol-ring spinerock-knoll swamp tainted-peak talisman-of-indulgence tectonic-giant terminate theater-of-horrors throes-of-chaos underdark-rift unstable-obelisk vandalblast warlock-class wild-magic-sorcerer you-find-some-prisoners zhalfirin-void'
+    cards = 'prosper-tome-bound apex-of-power arcane-signet bag-of-devouring bedevil bituminous-blast bojuka-bog bucknards-everfull-purse chaos-channeler chaos-wand chaos-warp chittering-witch command-tower commanders-sphere commune-with-lava consuming-vapors danse-macabre dark-dweller-oracle dead-mans-chest death-tyrant dire-fleet-daredevil disrupt-decorum dream-pillager ebony-fly etali-primal-storm exotic-orchard fellwar-stone fevered-suspicion fiend-of-the-shadows fiendlash foreboding-ruins gonti-lord-of-luxury grim-hireling hellish-rebuke hex hurl-through-hell ignite-the-future izzet-chemister karazikar-the-eye-tyrant light-up-the-stage lorcan-warlock-collector loyal-apprentice marionette-master mind-stone mortuary-mire mountain ogre-slumlord orazca-relic phthisis piper-of-the-swarm pontiff-of-blight rakdos-carnarium rakdos-charm rakdos-signet reckless-endeavor shadowblood-ridge share-the-spoils shiny-impetus smoldering-marsh sol-ring spinerock-knoll swamp tainted-peak talisman-of-indulgence tectonic-giant terminate theater-of-horrors throes-of-chaos underdark-rift unstable-obelisk vandalblast warlock-class wild-magic-sorcerer you-find-some-prisoners zhalfirin-void'
     
     # recs = [t[0] for t in generate_recommendations(cards, 20)]
     # print(*recs, sep="\n")
@@ -169,14 +186,19 @@ if __name__ == '__main__':
     # recs = [t[0] for t in generate_recommendations(deck, 20)]
     # print(*recs, sep="\n")
 
-    deck = utils.import_deck(constants.TEST_DECKS / '_1ucLPMTGWAouSCQuLRyig.json')
-    query, relevant_cards = deck_to_testcase(deck, seed=0)
-    recommendations = generate_recommendations(" ".join(query), k=1000)
+    # deck = cards.split(' ')
+    # deck = utils.import_deck(constants.TEST_DECKS / '_1ucLPMTGWAouSCQuLRyig.json')
+    # query, relevant_cards = deck_to_testcase(deck, seed=0, leave_out_count=10)
+    # recommendations = generate_recommendations(" ".join(query), k=1000, similar_decks_count=100)
 
-    print(average_precision(recommendations, relevant_cards))
-    P, R = pr_values(recommendations, relevant_cards)
-    pr_curve(P, R)
-    plt.show()
+    # print(*recommendations, sep="\n")
+    # print(average_precision(recommendations, relevant_cards))
+    # P, R = pr_values(recommendations, relevant_cards)
+    # pr_curve(P, R)
+    # plt.show()
     # plt.savefig('test.png')
+
+
+    
     pass
 
