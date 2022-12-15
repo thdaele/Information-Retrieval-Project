@@ -177,7 +177,7 @@ if __name__ == '__main__':
     # Prosper Tome-Bound precon
     cards = 'prosper-tome-bound apex-of-power arcane-signet bag-of-devouring bedevil bituminous-blast bojuka-bog bucknards-everfull-purse chaos-channeler chaos-wand chaos-warp chittering-witch command-tower commanders-sphere commune-with-lava consuming-vapors danse-macabre dark-dweller-oracle dead-mans-chest death-tyrant dire-fleet-daredevil disrupt-decorum dream-pillager ebony-fly etali-primal-storm exotic-orchard fellwar-stone fevered-suspicion fiend-of-the-shadows fiendlash foreboding-ruins gonti-lord-of-luxury grim-hireling hellish-rebuke hex hurl-through-hell ignite-the-future izzet-chemister karazikar-the-eye-tyrant light-up-the-stage lorcan-warlock-collector loyal-apprentice marionette-master mind-stone mortuary-mire mountain ogre-slumlord orazca-relic phthisis piper-of-the-swarm pontiff-of-blight rakdos-carnarium rakdos-charm rakdos-signet reckless-endeavor shadowblood-ridge share-the-spoils shiny-impetus smoldering-marsh sol-ring spinerock-knoll swamp tainted-peak talisman-of-indulgence tectonic-giant terminate theater-of-horrors throes-of-chaos underdark-rift unstable-obelisk vandalblast warlock-class wild-magic-sorcerer you-find-some-prisoners zhalfirin-void'
     
-    # recs = [t[0] for t in generate_recommendations(cards, 20)]
+    # recs = [t for t in generate_recommendations(cards, 20)]
     # print(*recs, sep="\n")
 
     # deck = generate_deck('prosper-tome-bound')
