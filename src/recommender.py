@@ -34,7 +34,7 @@ class Terms:
             Terms.size = r.json()['response']['numFound']
         return Terms.size
 
-def generate_recommendations(deck_string, k, similar_decks_count=10, use_deck_score=False, discount_factor=1.0, calculate_df_factor='no'):
+def generate_recommendations(deck_string, k=None, similar_decks_count=10, use_deck_score=False, discount_factor=1.0, calculate_df_factor='no'):
     """
     Generate k card recommendations for a (partial) commander deck.
     """
@@ -78,7 +78,10 @@ def generate_recommendations(deck_string, k, similar_decks_count=10, use_deck_sc
         discount *= discount_factor
 
     result = sorted(cards_score.items(), key=lambda t: t[1], reverse=True)
-    return list(t[0] for t in result[:k])
+    if k is None:
+        return list(t[0] for t in result)
+    else:
+        return list(t[0] for t in result[:k])
 
 
 def deck_to_testcase(deck, leave_out_count=25, seed=None):
@@ -175,7 +178,7 @@ if __name__ == '__main__':
     # cards = 'mizzix-of-the-izmagnus goblin-electromancer jaces-archivist gigantoplasm talrand-sky-summoner psychosis-crawler broodbirth-viper illusory-ambusher lone-revenant warchief-giant charmbreaker-devils arjun-the-shifting-flame etherium-horn-sorcerer melek-izzet-paragon dragon-mage preordain faithless-looting vandalblast mizzium-mortars windfall mystic-retrieval stolen-goods mizzixs-mastery rite-of-replication sleep chain-reaction call-the-skybreaker blatant-thievery epic-experiment meteor-blast blustersquall brainstorm echoing-truth desperate-ravings urzas-rage counterflux aetherize fact-or-fiction reins-of-power steam-augury mystic-confluence word-of-seizing act-of-aggression prophetic-bolt aethersnatch mirror-match fireminds-foresight repeal comet-storm magmaquake stroke-of-genius dominate blue-suns-zenith sol-ring izzet-signet thought-vessel worn-powerstone seal-of-the-guildpact awaken-the-sky-tyrant rite-of-the-raging-storm thought-reflection command-tower evolving-wilds izzet-boilerworks izzet-guildgate reliquary-tower rogues-passage spinerock-knoll swiftwater-cliffs temple-of-the-false-god terramorphic-expanse vivid-crag vivid-creek island mountain'
     
     # Prosper Tome-Bound precon
-    cards = 'prosper-tome-bound apex-of-power arcane-signet bag-of-devouring bedevil bituminous-blast bojuka-bog bucknards-everfull-purse chaos-channeler chaos-wand chaos-warp chittering-witch command-tower commanders-sphere commune-with-lava consuming-vapors danse-macabre dark-dweller-oracle dead-mans-chest death-tyrant dire-fleet-daredevil disrupt-decorum dream-pillager ebony-fly etali-primal-storm exotic-orchard fellwar-stone fevered-suspicion fiend-of-the-shadows fiendlash foreboding-ruins gonti-lord-of-luxury grim-hireling hellish-rebuke hex hurl-through-hell ignite-the-future izzet-chemister karazikar-the-eye-tyrant light-up-the-stage lorcan-warlock-collector loyal-apprentice marionette-master mind-stone mortuary-mire mountain ogre-slumlord orazca-relic phthisis piper-of-the-swarm pontiff-of-blight rakdos-carnarium rakdos-charm rakdos-signet reckless-endeavor shadowblood-ridge share-the-spoils shiny-impetus smoldering-marsh sol-ring spinerock-knoll swamp tainted-peak talisman-of-indulgence tectonic-giant terminate theater-of-horrors throes-of-chaos underdark-rift unstable-obelisk vandalblast warlock-class wild-magic-sorcerer you-find-some-prisoners zhalfirin-void'
+    # cards = 'prosper-tome-bound apex-of-power arcane-signet bag-of-devouring bedevil bituminous-blast bojuka-bog bucknards-everfull-purse chaos-channeler chaos-wand chaos-warp chittering-witch command-tower commanders-sphere commune-with-lava consuming-vapors danse-macabre dark-dweller-oracle dead-mans-chest death-tyrant dire-fleet-daredevil disrupt-decorum dream-pillager ebony-fly etali-primal-storm exotic-orchard fellwar-stone fevered-suspicion fiend-of-the-shadows fiendlash foreboding-ruins gonti-lord-of-luxury grim-hireling hellish-rebuke hex hurl-through-hell ignite-the-future izzet-chemister karazikar-the-eye-tyrant light-up-the-stage lorcan-warlock-collector loyal-apprentice marionette-master mind-stone mortuary-mire mountain ogre-slumlord orazca-relic phthisis piper-of-the-swarm pontiff-of-blight rakdos-carnarium rakdos-charm rakdos-signet reckless-endeavor shadowblood-ridge share-the-spoils shiny-impetus smoldering-marsh sol-ring spinerock-knoll swamp tainted-peak talisman-of-indulgence tectonic-giant terminate theater-of-horrors throes-of-chaos underdark-rift unstable-obelisk vandalblast warlock-class wild-magic-sorcerer you-find-some-prisoners zhalfirin-void'
     
     # recs = [t for t in generate_recommendations(cards, 20)]
     # print(*recs, sep="\n")
@@ -187,7 +190,22 @@ if __name__ == '__main__':
     # print(*recs, sep="\n")
 
     # deck = cards.split(' ')
-    # deck = utils.import_deck(constants.TEST_DECKS / '_1ucLPMTGWAouSCQuLRyig.json')
+    deck = utils.import_deck(constants.TEST_DECKS / '_6KuOeKz7PqR7uS-OZGZTg.json')
+    # print(*deck)
+    deck2 = utils.import_deck(constants.STORED_DECKS / 'h4-9DSLs4b8XfwM9WNJJ8Q.json') # 56.9
+    print(len(set(deck2) - set(deck)))
+
+    deck = utils.import_deck(constants.TEST_DECKS / '_2WwMMUZkokIqYrWW2wBAw.json')
+    # print(*deck)
+    deck2 = utils.import_deck(constants.STORED_DECKS / 'nTOV0BLS18bfqFGtRGDuGw.json') # 104.2
+    print(len(set(deck2) - set(deck)))
+
+    deck = utils.import_deck(constants.TEST_DECKS / '_6ct576cRdxoV-tC6ZkIBQ.json')
+    # print(*deck)
+    deck2 = utils.import_deck(constants.STORED_DECKS / 'MVp5PeQcTQFTeOAoV5g2Nw.json') # 63.7
+    print(len(set(deck2) - set(deck)))
+
+
     # query, relevant_cards = deck_to_testcase(deck, seed=0, leave_out_count=10)
     # recommendations = generate_recommendations(" ".join(query), k=1000, similar_decks_count=100)
 
