@@ -14,7 +14,7 @@ for deck in constants.TEST_DECKS.iterdir():
     TEST_DECKS_IDS.append(str(deck)[-27:-5])
 
 
-def run_experiment(fn, deck_count=10, seed_count=1, root_directory='results', name=None):
+def run_experiment(fn, test_decks, seed_count=1, root_directory='results', name=None):
     if name is None:
         name = fn.__name__
 
@@ -28,8 +28,7 @@ def run_experiment(fn, deck_count=10, seed_count=1, root_directory='results', na
     acc2 = Counter() # hold accumulated R-precision
 
     # go over random decks and random seeds = random test cases
-    random.seed(0)
-    for deck_id in tqdm(random.sample(TEST_DECKS_IDS, deck_count)):
+    for deck_id in tqdm(test_decks):
         deck = utils.import_deck(constants.TEST_DECKS / f'{deck_id}.json')
         
         for seed in range(seed_count):
@@ -78,8 +77,8 @@ def run_experiment(fn, deck_count=10, seed_count=1, root_directory='results', na
         for k, v1 in acc1.items():
             v2 = acc2[k]
 
-            v1f = "{:5.4f}".format(v1 / (deck_count * seed_count))
-            v2f = "{:5.4f}".format(v2 / (deck_count * seed_count))
+            v1f = "{:5.4f}".format(v1 / (len(test_decks) * seed_count))
+            v2f = "{:5.4f}".format(v2 / (len(test_decks) * seed_count))
             f.write(f'{k}\t{v1f}\t{v2f}\n')
 
 def varying_left_out(deck, seed):
@@ -94,9 +93,32 @@ def varying_left_out(deck, seed):
             similar_decks_count=10,
             use_deck_score=False,
             discount_factor=1.0,
-            calculate_df_factor=None
+            calculate_df_factor='no'
         )
         results[leave_out_count] = recommendations, relevant_cards
+
+    return results
+
+def final_results(deck, seed):
+    results = dict()
+    for leave_out_count in [5, 25, 50]:
+        query, relevant_cards  = recommender.deck_to_testcase(deck, leave_out_count, seed)
+        recommendations = recommender.generate_recommendations(" ".join(query), 
+            similar_decks_count=5,
+            use_deck_score=True,
+            discount_factor=0.7,
+            calculate_df_factor='df'
+        )
+        results[f'{leave_out_count} tuned'] = recommendations, relevant_cards
+
+        recommendations = recommender.generate_recommendations(" ".join(query), 
+            similar_decks_count=25,
+            use_deck_score=False,
+            discount_factor=1.0,
+            calculate_df_factor='no'
+        )
+        results[f'{leave_out_count} untuned'] = recommendations, relevant_cards
+
 
     return results
 
@@ -156,9 +178,17 @@ if __name__ == '__main__':
         'calculate_df_factor': ['no', 'idf', 'prob-idf', 'df']
     }))
 
-    # run_experiment(similar_decks_count, 500, name="similar_decks_count")
-    # run_experiment(similar_decks_count2, 500, name="similar_decks_count2")
-    # run_experiment(use_deck_score, 500, name="use_deck_score")
-    # run_experiment(discount_factor, 500, name="discount_factor")
-    # run_experiment(combining_three, 500, name="combining_three500")
-    # run_experiment(calculate_df_factor, 500, name="calculate_df_factor500")
+    random.seed(0)
+    tune_decks = set(random.sample(TEST_DECKS_IDS, 500))
+
+    # run_experiment(similar_decks_count, tune_decks, name="similar_decks_count")
+    # run_experiment(similar_decks_count2, tune_decks, name="similar_decks_count2")
+    # run_experiment(use_deck_score, tune_decks, name="use_deck_score")
+    # run_experiment(discount_factor, tune_decks, name="discount_factor")
+    # run_experiment(combining_three, tune_decks, name="combining_three")
+    # run_experiment(calculate_df_factor, tune_decks, name="calculate_df_factor")
+
+    test_decks = set(random.sample(TEST_DECKS_IDS, 5156)) - tune_decks # because 156 decks overlap
+    run_experiment(final_results, test_decks)
+
+    
